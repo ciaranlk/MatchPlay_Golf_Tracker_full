@@ -52,8 +52,11 @@ export default async function handler(req, res) {
     ]
   };
 
-  const holes = mockCourses[courseName];
+ const matchedKey = Object.keys(mockCourses).find(key =>
+  key.toLowerCase().includes(courseName.toLowerCase())
+);
 
+const holes = mockCourses[matchedKey];
   if (!holes) {
     return res.status(404).json({ error: `Course '${courseName}' not found.` });
   }
