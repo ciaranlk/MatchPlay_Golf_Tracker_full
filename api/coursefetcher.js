@@ -1,65 +1,49 @@
-// api/coursefetcher.js
+// /api/coursefetcher.js
 
 export default async function handler(req, res) {
   const { courseName } = req.query;
 
-  // TEMP: mock data - replace this with scraper or API fetch from England Golf
-  if (!courseName || courseName.trim() === '') {
-    return res.status(400).json({ error: 'Missing course name' });
+  if (!courseName) {
+    return res.status(400).json({ error: 'Missing courseName parameter' });
   }
 
-  // Simulated course data
-  const mockCourses = {
-    'Balmore GC': [
-      { hole: 1, par: 4, si: 10 },
-      { hole: 2, par: 3, si: 18 },
-      { hole: 3, par: 5, si: 4 },
-      { hole: 4, par: 4, si: 6 },
-      { hole: 5, par: 4, si: 14 },
-      { hole: 6, par: 4, si: 8 },
-      { hole: 7, par: 3, si: 16 },
-      { hole: 8, par: 5, si: 2 },
-      { hole: 9, par: 4, si: 12 },
-      { hole: 10, par: 4, si: 11 },
-      { hole: 11, par: 3, si: 17 },
-      { hole: 12, par: 5, si: 3 },
-      { hole: 13, par: 4, si: 5 },
-      { hole: 14, par: 4, si: 13 },
-      { hole: 15, par: 4, si: 7 },
-      { hole: 16, par: 3, si: 15 },
-      { hole: 17, par: 5, si: 1 },
-      { hole: 18, par: 4, si: 9 }
-    ],
-    'Newcastle United GC': [
-      { hole: 1, par: 4, si: 11 },
-      { hole: 2, par: 4, si: 7 },
-      { hole: 3, par: 3, si: 17 },
-      { hole: 4, par: 5, si: 3 },
-      { hole: 5, par: 4, si: 13 },
-      { hole: 6, par: 4, si: 9 },
-      { hole: 7, par: 4, si: 1 },
-      { hole: 8, par: 3, si: 15 },
-      { hole: 9, par: 5, si: 5 },
-      { hole: 10, par: 4, si: 12 },
-      { hole: 11, par: 5, si: 4 },
-      { hole: 12, par: 4, si: 2 },
-      { hole: 13, par: 4, si: 6 },
-      { hole: 14, par: 3, si: 16 },
-      { hole: 15, par: 5, si: 8 },
-      { hole: 16, par: 4, si: 10 },
-      { hole: 17, par: 3, si: 18 },
-      { hole: 18, par: 4, si: 14 }
-    ]
-  };
+  try {
+    const apiKey = 'YHNT3KMYKDBKYAPDRXLSY7WR3Q';
+    const response = await fetch(`https://golfcourseapi.com/api/v1/courses/search?query=${encodeURIComponent(courseName)}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
 
- const matchedKey = Object.keys(mockCourses).find(key =>
-  key.toLowerCase().includes(courseName.toLowerCase())
-);
+    const searchResults = await response.json();
+    if (!searchResults.courses || searchResults.courses.length === 0) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
 
-const holes = mockCourses[matchedKey];
-  if (!holes) {
-    return res.status(404).json({ error: `Course '${courseName}' not found.` });
+    const courseId = searchResults.courses[0].id;
+
+    const detailsRes = await fetch(`https://golfcourseapi.com/api/v1/courses/${courseId}`, {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const courseDetails = await detailsRes.json();
+    const holes = courseDetails?.holes?.map(h => ({
+      hole: h.number,
+      par: h.par,
+      si: h.stroke_index
+    })) || [];
+
+    res.status(200).json({
+      name: courseDetails.name,
+      holes
+    });
+
+  } catch (error) {
+    console.error('Error fetching course data:', error);
+    res.status(500).json({ error: 'Failed to fetch course data' });
   }
-
-  return res.status(200).json({ holes });
 }
