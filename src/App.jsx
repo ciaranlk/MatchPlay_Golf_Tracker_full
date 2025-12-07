@@ -1,93 +1,127 @@
-// src/App.jsx
+// src/App.jsx (final with deep copy + handicap logic working)
+
 import React, { useState, useEffect } from 'react';
 
-const NUM_HOLES = 18;
+const TOTAL_HOLES = 18;
 
-function calculateMatchStatus(results) {
-  let redWins = 0;
-  let blueWins = 0;
-  results.forEach((r) => {
-    if (r === 'Red') redWins++;
-    else if (r === 'Blue') blueWins++;
-  });
-  const lead = redWins - blueWins;
-  const remaining = NUM_HOLES - results.filter(Boolean).length;
-  if (lead === 0) return 'All Square';
-  if (lead > 0 && lead > remaining) return `Red wins ${lead}&${remaining}`;
-  if (lead < 0 && -lead > remaining) return `Blue wins ${-lead}&${remaining}`;
-  return lead > 0 ? `Red ${lead} Up` : `Blue ${-lead} Up`;
-}
-
-const App = () => {
-  const [teamRed, setTeamRed] = useState('Team Red');
-  const [teamBlue, setTeamBlue] = useState('Team Blue');
-  const [scores, setScores] = useState(Array(NUM_HOLES).fill({ red: null, blue: null }));
-  const [results, setResults] = useState(Array(NUM_HOLES).fill(null));
+export default function App() {
+  const [teamRed, setTeamRed] = useState('Red Team');
+  const [teamBlue, setTeamBlue] = useState('Blue Team');
+  const [scores, setScores] = useState(Array(TOTAL_HOLES).fill({ red: null, blue: null }));
+  const [results, setResults] = useState(Array(TOTAL_HOLES).fill(null));
   const [matchStatus, setMatchStatus] = useState('All Square');
-  const [courseData, setCourseData] = useState([]);
-  const [courseName, setCourseName] = useState('');
-
   const [hcpRedIndex, setHcpRedIndex] = useState(10);
-  const [hcpBlueIndex, setHcpBlueIndex] = useState(14);
-  const [hcpDiff, setHcpDiff] = useState(0);
+  const [hcpBlueIndex, setHcpBlueIndex] = useState(15);
+  const [courseData, setCourseData] = useState([]);
   const [shotsGiven, setShotsGiven] = useState([]);
+  const [courseName, setCourseName] = useState('Balmore GC');
 
   useEffect(() => {
-    const diff = Math.abs(hcpRedIndex - hcpBlueIndex);
-    const siSorted = [...courseData].sort((a, b) => a.si - b.si);
-    const shotHoles = siSorted.slice(0, diff).map(h => h.hole);
-    setHcpDiff(diff);
-    setShotsGiven(shotHoles);
+    fetchCourse(courseName);
+  }, []);
+
+  useEffect(() => {
+    calculateShotsGiven();
   }, [hcpRedIndex, hcpBlueIndex, courseData]);
 
+  const fetchCourse = async (name) => {
+    const res = await fetch(`/api/coursefetcher?courseName=${encodeURIComponent(name)}`);
+    const data = await res.json();
+    if (!data.holes) return;
+    setCourseData(data.holes.sort((a, b) => a.hole - b.hole));
+  };
+
+  const calculateShotsGiven = () => {
+    const diff = Math.abs(hcpRedIndex - hcpBlueIndex);
+    const sortedBySI = [...courseData].sort((a, b) => a.si - b.si);
+    const holesToGetStrokes = sortedBySI.slice(0, diff).map(h => h.hole);
+    setShotsGiven(holesToGetStrokes);
+  };
+
+  const calculateMatchStatus = (results) => {
+    let redWins = 0;
+    let blueWins = 0;
+
+    for (let i = 0; i < TOTAL_HOLES; i++) {
+      const r = results[i];
+      if (r === 'Red') redWins++;
+      if (r === 'Blue') blueWins++;
+
+      const remaining = TOTAL_HOLES - (i + 1);
+      if (redWins > blueWins + remaining) return `${teamRed} Wins ${redWins - blueWins}&${remaining}`;
+      if (blueWins > redWins + remaining) return `${teamBlue} Wins ${blueWins - redWins}&${remaining}`;
+    }
+
+    if (redWins > blueWins) return `${teamRed} ${redWins - blueWins} Up`;
+    if (blueWins > redWins) return `${teamBlue} ${blueWins - redWins} Up`;
+    return 'All Square';
+  };
+
   const updateScore = (hole, team, action) => {
-    const newScores = [...scores];
+    const newScores = scores.map(score => ({ ...score }));
     const current = newScores[hole][team];
+
     if (action === '+') newScores[hole][team] = current !== null ? current + 1 : 1;
     else if (action === '-') newScores[hole][team] = current > 1 ? current - 1 : null;
     else newScores[hole][team] = null;
+
     setScores(newScores);
 
     const red = newScores[hole].red;
     const blue = newScores[hole].blue;
+
+    let adjustedRed = red;
+    let adjustedBlue = blue;
+
     if (red !== null && blue !== null) {
-      const adjustedRed = hcpRedIndex > hcpBlueIndex && shotsGiven.includes(hole + 1) ? red - 1 : red;
-      const adjustedBlue = hcpBlueIndex > hcpRedIndex && shotsGiven.includes(hole + 1) ? blue - 1 : blue;
+      if (hcpRedIndex > hcpBlueIndex && shotsGiven.includes(hole + 1)) adjustedRed -= 1;
+      if (hcpBlueIndex > hcpRedIndex && shotsGiven.includes(hole + 1)) adjustedBlue -= 1;
+
       if (adjustedRed < adjustedBlue) results[hole] = 'Red';
       else if (adjustedRed > adjustedBlue) results[hole] = 'Blue';
       else results[hole] = 'Half';
     } else {
       results[hole] = null;
     }
+
     setResults([...results]);
     setMatchStatus(calculateMatchStatus(results));
   };
 
-  const fetchCourse = async () => {
-    const res = await fetch(`/api/coursefetcher?courseName=${encodeURIComponent(courseName)}`);
-    const data = await res.json();
-    setCourseData(data.holes.sort((a, b) => a.hole - b.hole));
-  };
-
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Golf Matchplay Tracker</h2>
-      <div>
-        <input placeholder="Course Name" value={courseName} onChange={(e) => setCourseName(e.target.value)} />
-        <button onClick={fetchCourse}>Load Course</button>
+    <div style={{ padding: 20, maxWidth: 800, margin: 'auto' }}>
+      <h1>Golf Matchplay Tracker</h1>
+
+      <label>Course: </label>
+      <input
+        value={courseName}
+        onChange={e => setCourseName(e.target.value)}
+        onBlur={() => fetchCourse(courseName)}
+        style={{ marginBottom: 10, width: '100%' }}
+      />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+        <input value={teamRed} onChange={e => setTeamRed(e.target.value)} />
+        <input value={teamBlue} onChange={e => setTeamBlue(e.target.value)} />
       </div>
-      <div>
-        <input value={teamRed} onChange={(e) => setTeamRed(e.target.value)} style={{ color: 'red' }} />
-        <input value={teamBlue} onChange={(e) => setTeamBlue(e.target.value)} style={{ color: 'blue' }} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+        <label>{teamRed} Handicap Index:</label>
+        <input
+          type="number"
+          value={hcpRedIndex}
+          onChange={e => setHcpRedIndex(Number(e.target.value))}
+        />
+
+        <label>{teamBlue} Handicap Index:</label>
+        <input
+          type="number"
+          value={hcpBlueIndex}
+          onChange={e => setHcpBlueIndex(Number(e.target.value))}
+        />
       </div>
-      <div>
-        <label>{teamRed} Handicap Index: </label>
-        <input type="number" value={hcpRedIndex} onChange={(e) => setHcpRedIndex(Number(e.target.value))} />
-        <label>{teamBlue} Handicap Index: </label>
-        <input type="number" value={hcpBlueIndex} onChange={(e) => setHcpBlueIndex(Number(e.target.value))} />
-      </div>
-      <h3>Match Status: {matchStatus}</h3>
-      <table>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
             <th>Hole</th>
@@ -99,28 +133,30 @@ const App = () => {
           </tr>
         </thead>
         <tbody>
-          {courseData.map((hole, i) => (
-            <tr key={i}>
-              <td>{hole.hole}</td>
-              <td>{hole.par}</td>
-              <td>{hole.si}</td>
+          {courseData.map((holeData, i) => (
+            <tr key={i} style={{ textAlign: 'center' }}>
+              <td>{holeData.hole}</td>
+              <td>{holeData.par}</td>
+              <td>{holeData.si}</td>
               <td>
-                <button onClick={() => updateScore(i, 'red', '+')}>+</button>
                 <button onClick={() => updateScore(i, 'red', '-')}>-</button>
-                <span>{scores[i].red}</span>
+                {scores[i].red ?? '-'}
+                <button onClick={() => updateScore(i, 'red', '+')}>+</button>
+                {hcpRedIndex > hcpBlueIndex && shotsGiven.includes(holeData.hole) && <span> +1</span>}
               </td>
               <td>
-                <button onClick={() => updateScore(i, 'blue', '+')}>+</button>
                 <button onClick={() => updateScore(i, 'blue', '-')}>-</button>
-                <span>{scores[i].blue}</span>
+                {scores[i].blue ?? '-'}
+                <button onClick={() => updateScore(i, 'blue', '+')}>+</button>
+                {hcpBlueIndex > hcpRedIndex && shotsGiven.includes(holeData.hole) && <span> +1</span>}
               </td>
-              <td>{results[i]}</td>
+              <td>{results[i] ?? '-'}</td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      <h2>Match Status: {matchStatus}</h2>
     </div>
   );
-};
-
-export default App;
+}
