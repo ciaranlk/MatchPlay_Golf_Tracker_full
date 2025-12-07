@@ -1,45 +1,62 @@
-
-import fetch from 'node-fetch';
-import * as cheerio from 'cheerio';
+// api/coursefetcher.js
 
 export default async function handler(req, res) {
   const { courseName } = req.query;
 
-  if (!courseName) {
-    return res.status(400).json({ error: "Missing courseName query parameter" });
+  // TEMP: mock data - replace this with scraper or API fetch from England Golf
+  if (!courseName || courseName.trim() === '') {
+    return res.status(400).json({ error: 'Missing course name' });
   }
 
-  try {
-    const searchUrl = `https://www.englandgolf.org/find-a-course/?q=${encodeURIComponent(courseName)}`;
-    const searchRes = await fetch(searchUrl);
-    const searchHTML = await searchRes.text();
-    const $ = cheerio.load(searchHTML);
+  // Simulated course data
+  const mockCourses = {
+    'Balmore GC': [
+      { hole: 1, par: 4, si: 10 },
+      { hole: 2, par: 3, si: 18 },
+      { hole: 3, par: 5, si: 4 },
+      { hole: 4, par: 4, si: 6 },
+      { hole: 5, par: 4, si: 14 },
+      { hole: 6, par: 4, si: 8 },
+      { hole: 7, par: 3, si: 16 },
+      { hole: 8, par: 5, si: 2 },
+      { hole: 9, par: 4, si: 12 },
+      { hole: 10, par: 4, si: 11 },
+      { hole: 11, par: 3, si: 17 },
+      { hole: 12, par: 5, si: 3 },
+      { hole: 13, par: 4, si: 5 },
+      { hole: 14, par: 4, si: 13 },
+      { hole: 15, par: 4, si: 7 },
+      { hole: 16, par: 3, si: 15 },
+      { hole: 17, par: 5, si: 1 },
+      { hole: 18, par: 4, si: 9 }
+    ],
+    'Newcastle United GC': [
+      { hole: 1, par: 4, si: 11 },
+      { hole: 2, par: 4, si: 7 },
+      { hole: 3, par: 3, si: 17 },
+      { hole: 4, par: 5, si: 3 },
+      { hole: 5, par: 4, si: 13 },
+      { hole: 6, par: 4, si: 9 },
+      { hole: 7, par: 4, si: 1 },
+      { hole: 8, par: 3, si: 15 },
+      { hole: 9, par: 5, si: 5 },
+      { hole: 10, par: 4, si: 12 },
+      { hole: 11, par: 5, si: 4 },
+      { hole: 12, par: 4, si: 2 },
+      { hole: 13, par: 4, si: 6 },
+      { hole: 14, par: 3, si: 16 },
+      { hole: 15, par: 5, si: 8 },
+      { hole: 16, par: 4, si: 10 },
+      { hole: 17, par: 3, si: 18 },
+      { hole: 18, par: 4, si: 14 }
+    ]
+  };
 
-    const courseLink = $('a.course-link').first().attr('href');
-    if (!courseLink) {
-      return res.status(404).json({ error: "Course not found" });
-    }
+  const holes = mockCourses[courseName];
 
-    const coursePageRes = await fetch(courseLink);
-    const courseHTML = await coursePageRes.text();
-    const $$ = cheerio.load(courseHTML);
-
-    const holes = [];
-    $$('#scorecard-table tbody tr').each((i, el) => {
-      const tds = $$(el).find('td');
-      const hole = i + 1;
-      const par = parseInt($$(tds[1]).text());
-      const si = parseInt($$(tds[2]).text());
-      holes.push({ hole, par, si });
-    });
-
-    if (holes.length === 0) {
-      return res.status(500).json({ error: "Failed to parse course data" });
-    }
-
-    res.status(200).json({ holes });
-  } catch (err) {
-    console.error("Error fetching course:", err);
-    res.status(500).json({ error: "Internal server error", detail: err.message });
+  if (!holes) {
+    return res.status(404).json({ error: `Course '${courseName}' not found.` });
   }
+
+  return res.status(200).json({ holes });
 }
