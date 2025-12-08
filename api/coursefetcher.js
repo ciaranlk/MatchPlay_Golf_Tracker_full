@@ -1,4 +1,4 @@
-// /api/coursefetcher.js
+// /api/coursefetcher.js - uses Golf Data API from Jacobbrewer1
 
 export default async function handler(req, res) {
   const { courseName } = req.query;
@@ -8,42 +8,48 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiKey = 'YHNT3KMYKDBKYAPDRXLSY7WR3Q';
-    const response = await fetch(`https://golfcourseapi.com/api/v1/courses/search?query=${encodeURIComponent(courseName)}`, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    // 1. Search clubs
+    const clubsRes = await fetch(`https://golf-data-api.vercel.app/api/clubs`);
+    const clubs = await clubsRes.json();
 
-    const searchResults = await response.json();
-    if (!searchResults.courses || searchResults.courses.length === 0) {
-      return res.status(404).json({ error: 'Course not found' });
+    const matchedClub = clubs.find(c =>
+      c.name.toLowerCase().includes(courseName.toLowerCase())
+    );
+
+    if (!matchedClub) {
+      return res.status(404).json({ error: 'Club not found' });
     }
 
-    const courseId = searchResults.courses[0].id;
+    // 2. Get courses for that club
+    const coursesRes = await fetch(`https://golf-data-api.vercel.app/api/clubs/${matchedClub.id}/courses`);
+    const courses = await coursesRes.json();
 
-    const detailsRes = await fetch(`https://golfcourseapi.com/api/v1/courses/${courseId}`, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    if (!courses.length) {
+      return res.status(404).json({ error: 'No courses for club' });
+    }
 
-    const courseDetails = await detailsRes.json();
-    const holes = courseDetails?.holes?.map(h => ({
+    // 3. Pick the first course's first marker (tee set)
+    const markerId = courses[0].marker_sets[0]?.id;
+    if (!markerId) {
+      return res.status(404).json({ error: 'No marker sets available for course' });
+    }
+
+    // 4. Get holes for that marker
+    const holesRes = await fetch(`https://golf-data-api.vercel.app/api/markers/${markerId}/holes`);
+    const holeData = await holesRes.json();
+
+    const holes = holeData.map(h => ({
       hole: h.number,
       par: h.par,
       si: h.stroke_index
-    })) || [];
+    }));
 
     res.status(200).json({
-      name: courseDetails.name,
+      name: matchedClub.name,
       holes
     });
-
   } catch (error) {
-    console.error('Error fetching course data:', error);
+    console.error('Error using Golf Data API:', error);
     res.status(500).json({ error: 'Failed to fetch course data' });
   }
 }
