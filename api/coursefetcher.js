@@ -6,48 +6,31 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiKey = 'YHNT3KMYKDBKYAPDRXLSY7WR3Q'; // Your GolfCourseAPI key
+    const rapidApiKey = 'cd3951f87emsh0b5f5033b9096a2p1c849bjsn18ab8e619afc'; // Your RapidAPI key
 
-    const searchRes = await fetch(`https://api.golfcourseapi.com/v1/search?name=${encodeURIComponent(courseName)}`, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
+    const response = await fetch(
+      `https://golf-course-api.p.rapidapi.com/search?name=${encodeURIComponent(courseName)}`,
+      {
+        headers: {
+          'x-rapidapi-host': 'golf-course-api.p.rapidapi.com',
+          'x-rapidapi-key': rapidApiKey,
+        }
       }
-    });
+    );
 
-    if (!searchRes.ok) {
-      throw new Error(`Search failed: ${searchRes.status}`);
+    if (!response.ok) {
+      throw new Error(`Search failed: ${response.status}`);
     }
 
-    const searchData = await searchRes.json();
+    const data = await response.json();
 
-    if (!searchData || !searchData.length) {
-      return res.status(404).json({ error: 'No matching courses found' });
+    if (!data || !data.length) {
+      return res.status(404).json({ error: 'No matching course found' });
     }
 
-    const courseId = searchData[0].id;
-
-    const courseRes = await fetch(`https://api.golfcourseapi.com/v1/courses/${courseId}`, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      }
-    });
-
-    if (!courseRes.ok) {
-      throw new Error(`Course fetch failed: ${courseRes.status}`);
-    }
-
-    const courseData = await courseRes.json();
-
-    const holes = courseData.holes.map(h => ({
-      hole: h.number,
-      par: h.par,
-      si: h.stroke_index
-    }));
-
-    res.status(200).json({
-      name: courseData.name,
-      holes
-    });
+    // Return course list directly — you can enhance this later
+    res.status(200).json({ courses: data });
+    
   } catch (error) {
     console.error('GolfCourseAPI error:', error.message);
     res.status(500).json({ error: 'Failed to fetch course data' });
