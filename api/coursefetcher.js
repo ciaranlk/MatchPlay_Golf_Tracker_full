@@ -1,5 +1,3 @@
-// /api/coursefetcher.js - uses Golf Data API from Jacobbrewer1
-
 export default async function handler(req, res) {
   const { courseName } = req.query;
 
@@ -8,10 +6,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Search clubs
-    const clubsRes = await fetch(`https://golf-data-api.vercel.app/api/clubs`);
-    const clubs = await clubsRes.json();
+    const fetchJsonSafely = async (url) => {
+      const response = await fetch(url);
+      const text = await response.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error(`Invalid JSON from ${url}: ${text.slice(0, 100)}...`);
+      }
+    };
 
+    // 1. Search clubs
+    const clubs = await fetchJsonSafely(`https://golf-data-api.vercel.app/api/clubs`);
     const matchedClub = clubs.find(c =>
       c.name.toLowerCase().includes(courseName.toLowerCase())
     );
@@ -21,22 +27,20 @@ export default async function handler(req, res) {
     }
 
     // 2. Get courses for that club
-    const coursesRes = await fetch(`https://golf-data-api.vercel.app/api/clubs/${matchedClub.id}/courses`);
-    const courses = await coursesRes.json();
+    const courses = await fetchJsonSafely(`https://golf-data-api.vercel.app/api/clubs/${matchedClub.id}/courses`);
 
     if (!courses.length) {
       return res.status(404).json({ error: 'No courses for club' });
     }
 
     // 3. Pick the first course's first marker (tee set)
-    const markerId = courses[0].marker_sets[0]?.id;
+    const markerId = courses?.[0]?.marker_sets?.[0]?.id;
     if (!markerId) {
       return res.status(404).json({ error: 'No marker sets available for course' });
     }
 
     // 4. Get holes for that marker
-    const holesRes = await fetch(`https://golf-data-api.vercel.app/api/markers/${markerId}/holes`);
-    const holeData = await holesRes.json();
+    const holeData = await fetchJsonSafely(`https://golf-data-api.vercel.app/api/markers/${markerId}/holes`);
 
     const holes = holeData.map(h => ({
       hole: h.number,
@@ -44,12 +48,12 @@ export default async function handler(req, res) {
       si: h.stroke_index
     }));
 
-    res.status(200).json({
+    return res.status(200).json({
       name: matchedClub.name,
       holes
     });
   } catch (error) {
-    console.error('Error using Golf Data API:', error);
-    res.status(500).json({ error: 'Failed to fetch course data' });
+    console.error('Error using Golf Data API:', error.message);
+    return res.status(500).json({ error: error.message });
   }
 }
