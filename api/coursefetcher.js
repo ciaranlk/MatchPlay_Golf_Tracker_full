@@ -6,41 +6,50 @@ export default async function handler(req, res) {
   }
 
   try {
-    const apiKey = 'YHNT3KMYKDBKYAPDRXLSY7WR3Q'; // your GolfCourseAPI key
+    const apiKey = 'YHNT3KMYKDBKYAPDRXLSY7WR3Q'; // Your GolfCourseAPI key
 
-    // 1. Search for the course
     const searchRes = await fetch(`https://api.golfcourseapi.com/v1/search?name=${encodeURIComponent(courseName)}`, {
       headers: {
-        'x-api-key': apiKey,
-        'Accept': 'application/json'
+        'Authorization': `Bearer ${apiKey}`
       }
     });
 
-    const searchData = await searchRes.json();
-    if (!searchData.courses || searchData.courses.length === 0) {
-      return res.status(404).json({ error: 'Course not found' });
+    if (!searchRes.ok) {
+      throw new Error(`Search failed: ${searchRes.status}`);
     }
 
-    // 2. Get course details
-    const courseId = searchData.courses[0].id;
-    const detailsRes = await fetch(`https://api.golfcourseapi.com/v1/courses/${courseId}`, {
+    const searchData = await searchRes.json();
+
+    if (!searchData || !searchData.length) {
+      return res.status(404).json({ error: 'No matching courses found' });
+    }
+
+    const courseId = searchData[0].id;
+
+    const courseRes = await fetch(`https://api.golfcourseapi.com/v1/courses/${courseId}`, {
       headers: {
-        'x-api-key': apiKey,
-        'Accept': 'application/json'
+        'Authorization': `Bearer ${apiKey}`
       }
     });
 
-    const courseData = await detailsRes.json();
-    const tee = courseData.tees[0]; // use first tee set
-    const holes = tee.holes.map(h => ({
+    if (!courseRes.ok) {
+      throw new Error(`Course fetch failed: ${courseRes.status}`);
+    }
+
+    const courseData = await courseRes.json();
+
+    const holes = courseData.holes.map(h => ({
       hole: h.number,
       par: h.par,
       si: h.stroke_index
     }));
 
-    res.status(200).json({ name: courseData.name, holes });
+    res.status(200).json({
+      name: courseData.name,
+      holes
+    });
   } catch (error) {
-    console.error('GolfCourseAPI error:', error);
+    console.error('GolfCourseAPI error:', error.message);
     res.status(500).json({ error: 'Failed to fetch course data' });
   }
 }
