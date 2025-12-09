@@ -16,10 +16,29 @@ const App = () => {
   }, [courseData]);
 
   const fetchCourse = async () => {
+  try {
     const res = await fetch(`/api/coursefetcher?courseName=${encodeURIComponent(courseName)}`);
     const data = await res.json();
-    setCourseData(data.holes.sort((a, b) => a.hole - b.hole));
-  };
+
+    if (!res.ok) {
+      alert(`Error: ${data.error}`);
+      return;
+    }
+
+    if (!data.holes || data.holes.length === 0) {
+      alert("No holes returned. Try a different course name.");
+      return;
+    }
+
+    // Sort holes by number
+    const sorted = data.holes.sort((a, b) => a.hole - b.hole);
+    setCourseData(sorted);
+  } catch (error) {
+    console.error("Fetch error:", error);
+    alert("Failed to load course. Check console.");
+  }
+};
+
 
   const updateScore = (index, team, value) => {
     const newScores = [...scores];
