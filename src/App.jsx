@@ -1,107 +1,123 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import './App.css';
 
-const App = () => {
+function App() {
   const [courseName, setCourseName] = useState('');
   const [courseData, setCourseData] = useState([]);
-  const [team1Name, setTeam1Name] = useState('Red');
-  const [team2Name, setTeam2Name] = useState('Blue');
+  const [teamRedName, setTeamRedName] = useState('Red');
+  const [teamBlueName, setTeamBlueName] = useState('Blue');
+  const [teamRedIndex, setTeamRedIndex] = useState(10);
+  const [teamBlueIndex, setTeamBlueIndex] = useState(10);
   const [scores, setScores] = useState([]);
-  const [matchStatus, setMatchStatus] = useState('AS');
 
   useEffect(() => {
-    if (courseData.length) {
-      setScores(courseData.map(() => ({ team1: 0, team2: 0 })));
+    if (courseData.length > 0) {
+      const initialScores = courseData.map(hole => ({
+        hole: hole.hole,
+        red: hole.par,
+        blue: hole.par
+      }));
+      setScores(initialScores);
     }
   }, [courseData]);
 
   const fetchCourse = async () => {
-  try {
     const res = await fetch(`/api/coursefetcher?courseName=${encodeURIComponent(courseName)}`);
     const data = await res.json();
-
-    if (!res.ok) {
-      alert(`Error: ${data.error}`);
-      return;
+    if (data.holes) {
+      setCourseData(data.holes.sort((a, b) => a.hole - b.hole));
     }
+  };
 
-    if (!data.holes || data.holes.length === 0) {
-      alert("No holes returned. Try a different course name.");
-      return;
+  const adjustScore = (holeNumber, team, delta) => {
+    setScores(prev => prev.map(row => row.hole === holeNumber ? { ...row, [team]: row[team] + delta } : row));
+  };
+
+  const getShotsGiven = () => {
+    const diff = teamRedIndex - teamBlueIndex;
+    const shots = Array(18).fill(0);
+    if (diff === 0) return shots;
+    const giveShotsTo = diff > 0 ? 'red' : 'blue';
+    const count = Math.abs(diff);
+    const sorted = [...courseData].sort((a, b) => a.si - b.si);
+    for (let i = 0; i < count; i++) {
+      const holeNum = sorted[i].hole;
+      const idx = courseData.findIndex(h => h.hole === holeNum);
+      shots[idx] = giveShotsTo;
     }
+    return shots;
+  };
 
-    // Sort holes by number
-    const sorted = data.holes.sort((a, b) => a.hole - b.hole);
-    setCourseData(sorted);
-  } catch (error) {
-    console.error("Fetch error:", error);
-    alert("Failed to load course. Check console.");
+  const determineResult = (holeIdx) => {
+    const score = scores[holeIdx];
+    const stroke = shotsGiven[holeIdx];
+    let redNet = score.red;
+    let blueNet = score.blue;
+    if (stroke === 'red') redNet--;
+    if (stroke === 'blue') blueNet--;
+    if (redNet < blueNet) return teamRedName;
+    if (blueNet < redNet) return teamBlueName;
+    return 'Half';
+  };
+
+  const shotsGiven = getShotsGiven();
+  const results = scores.map((_, i) => determineResult(i));
+  let redUp = 0, blueUp = 0;
+  for (let r of results) {
+    if (r === teamRedName) redUp++;
+    if (r === teamBlueName) blueUp++;
   }
-};
-
-
-  const updateScore = (index, team, value) => {
-    const newScores = [...scores];
-    newScores[index] = {
-      ...newScores[index],
-      [team]: newScores[index][team] + value,
-    };
-    setScores(newScores);
-    calculateMatchStatus(newScores);
-  };
-
-  const calculateMatchStatus = (scoreData) => {
-    let team1Wins = 0;
-    let team2Wins = 0;
-
-    scoreData.forEach(score => {
-      if (score.team1 > score.team2) team1Wins++;
-      if (score.team2 > score.team1) team2Wins++;
-    });
-
-    const diff = team1Wins - team2Wins;
-    if (diff === 0) setMatchStatus('AS');
-    else if (diff > 0) setMatchStatus(`${team1Name} ${diff} Up`);
-    else setMatchStatus(`${team2Name} ${Math.abs(diff)} Up`);
-  };
+  const matchStatus = redUp === blueUp ? 'AS' : (redUp > blueUp ? `${teamRedName} ${redUp - blueUp} Up` : `${teamBlueName} ${blueUp - redUp} Up`);
 
   return (
-    <div>
+    <div className="App">
       <h1>Golf Matchplay Tracker</h1>
       <div>
-        <label>Course: </label>
-        <input
-          value={courseName}
-          onChange={(e) => setCourseName(e.target.value)}
-          placeholder="Enter Course Name"
-        />
+        <label>Course: <input value={courseName} onChange={e => setCourseName(e.target.value)} /></label>
         <button onClick={fetchCourse}>Load Course</button>
       </div>
-
       <div>
-        <label>{team1Name} Name: </label>
-        <input value={team1Name} onChange={(e) => setTeam1Name(e.target.value)} />
-        <label>{team2Name} Name: </label>
-        <input value={team2Name} onChange={(e) => setTeam2Name(e.target.value)} />
+        <label>Red Name: <input value={teamRedName} onChange={e => setTeamRedName(e.target.value)} /></label>
+        <label>Blue Name: <input value={teamBlueName} onChange={e => setTeamBlueName(e.target.value)} /></label>
       </div>
-
-      <h2>Match Status: {matchStatus}</h2>
-
-      <div className="scorecard">
-        {courseData.map((hole, idx) => (
-          <div key={idx}>
-            <strong>Hole {hole.hole}</strong>
-            <div>Par: {hole.par}</div>
-            <div>SI: {hole.si}</div>
-            <div>{team1Name}: {scores[idx]?.team1 || 0}</div>
-            <div>{team2Name}: {scores[idx]?.team2 || 0}</div>
-            <button className="team1" onClick={() => updateScore(idx, 'team1', 1)}>{team1Name} +1</button>
-            <button className="team2" onClick={() => updateScore(idx, 'team2', 1)}>{team2Name} +1</button>
-          </div>
-        ))}
+      <div>
+        <label>{teamRedName} Handicap Index: <input type="number" value={teamRedIndex} onChange={e => setTeamRedIndex(+e.target.value)} /></label>
+        <label>{teamBlueName} Handicap Index: <input type="number" value={teamBlueIndex} onChange={e => setTeamBlueIndex(+e.target.value)} /></label>
       </div>
+      <h3>Match Status: {matchStatus}</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Hole</th><th>Par</th><th>SI</th>
+            <th style={{ color: 'red' }}>{teamRedName}</th>
+            <th style={{ color: 'blue' }}>{teamBlueName}</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {courseData.map((hole, i) => (
+            <tr key={hole.hole}>
+              <td>{hole.hole}</td>
+              <td>{hole.par}</td>
+              <td>{hole.si}</td>
+              <td>
+                <button onClick={() => adjustScore(hole.hole, 'red', 1)}>+</button>
+                <button onClick={() => adjustScore(hole.hole, 'red', -1)}>-</button>
+                {scores[i]?.red || ''} {shotsGiven[i] === 'red' ? <span style={{ color: 'red' }}>(-1)</span> : ''}
+              </td>
+              <td>
+                <button onClick={() => adjustScore(hole.hole, 'blue', 1)}>+</button>
+                <button onClick={() => adjustScore(hole.hole, 'blue', -1)}>-</button>
+                {scores[i]?.blue || ''} {shotsGiven[i] === 'blue' ? <span style={{ color: 'blue' }}>(-1)</span> : ''}
+              </td>
+              <td>{results[i]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
-};
+}
 
 export default App;
