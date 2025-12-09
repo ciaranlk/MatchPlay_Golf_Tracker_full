@@ -6,33 +6,34 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rapidApiKey = 'cd3951f87emsh0b5f5033b9096a2p1c849bjsn18ab8e619afc'; // Your RapidAPI key
+    const apiKey = 'cd3951f87emsh0b5f5033b9096a2p1c849bjsn18ab8e619afc';
 
     const response = await fetch(
       `https://golf-course-api.p.rapidapi.com/search?name=${encodeURIComponent(courseName)}`,
       {
+        method: 'GET',
         headers: {
           'x-rapidapi-host': 'golf-course-api.p.rapidapi.com',
-          'x-rapidapi-key': rapidApiKey,
+          'x-rapidapi-key': apiKey
         }
       }
     );
 
     if (!response.ok) {
-      throw new Error(`Search failed: ${response.status}`);
+      throw new Error(`Search failed with status ${response.status}`);
     }
 
     const data = await response.json();
 
-    if (!data || !data.length) {
-      return res.status(404).json({ error: 'No matching course found' });
+    if (!Array.isArray(data) || data.length === 0) {
+      return res.status(404).json({ error: 'No courses found' });
     }
 
-    // Return course list directly — you can enhance this later
-    res.status(200).json({ courses: data });
-    
-  } catch (error) {
-    console.error('GolfCourseAPI error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch course data' });
+    // Return all results for debugging for now
+    return res.status(200).json({ courses: data });
+
+  } catch (err) {
+    console.error('GolfCourseAPI error:', err.message);
+    return res.status(500).json({ error: 'Server error' });
   }
 }
